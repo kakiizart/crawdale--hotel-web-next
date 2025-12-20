@@ -2,25 +2,28 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-type Role = "admin" | "staff" | "guest";
+export type Role = "admin" | "staff" | "guest";
 
-export async function requireUser(nextPath: string = "/admin") {
+export async function requireUser(nextPath: string = "/dashboard") {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
 
-  if (error || !data?.user) {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
     redirect(`/auth/login?next=${encodeURIComponent(nextPath)}`);
   }
 
-  return data.user;
+  return { supabase, user };
 }
 
 export async function requireRole(
   allowed: Role[],
-  nextPath: string = "/admin"
+  nextPath: string = "/dashboard"
 ) {
-  const user = await requireUser(nextPath);
-  const supabase = await createClient();
+  const { supabase, user } = await requireUser(nextPath);
 
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -30,8 +33,9 @@ export async function requireRole(
 
   const role = (profile?.role ?? "guest") as Role;
 
+  // If they’re logged in but don’t have permission:
   if (error || !allowed.includes(role)) {
-    redirect(`/auth/login?next=${encodeURIComponent(nextPath)}`);
+    redirect(`/403?next=${encodeURIComponent(nextPath)}`);
   }
 
   return { user, role };

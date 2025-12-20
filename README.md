@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Crawdale Hotel Web (Next.js)
 
-## Getting Started
+A Next.js web app for the Crawdale Hotel Management system.  
+Current focus: authentication, role-based access, and secure server/database enforcement (RLS).
 
-First, run the development server:
+## Tech Stack
+- Next.js (App Router)
+- Supabase (Auth + Postgres)
+- Row Level Security (RLS) policies for authorization
+
+---
+
+## Current Features
+- **Supabase Auth (PKCE) working end-to-end**
+  - Auth callback route exchanges code for a session successfully
+  - Session stored correctly (no PKCE verifier issues)
+- **Role-based route protection (server-side)**
+  - `/admin` protected (admin/staff only)
+  - `/dashboard` protected (guest/staff/admin)
+  - Unauthorized users redirected to a **403 Forbidden** page
+- **Profiles table**
+  - `profiles` linked to `auth.users`
+  - Default role is `guest`
+- **Database-level authorization (RLS)**
+  - Users can read/update **their own** profile only
+  - Staff/admin can read broader data where permitted
+  - Role escalation from the client is blocked (admin-only)
+
+---
+
+## Security / Fixes Completed
+- Fixed **AuthPKCECodeVerifierMissingError** by aligning SSR/client auth handling and ensuring callback flow is cookie-based.
+- Implemented **server-side guards** (`requireUser`, `requireRole`) so the app does not trust client role strings.
+- Enabled and tested **Supabase RLS** so authorization is enforced at the database level.
+- Removed/avoided **recursive RLS policy patterns** that caused `stack depth limit exceeded` errors.
+
+---
+
+## Pages / Routes
+- `/auth/login` – login page
+- `/auth/callback` – auth callback (exchanges auth code for session)
+- `/dashboard` – protected dashboard (guest/staff/admin)
+- `/admin` – protected admin area (staff/admin)
+- `/403` – forbidden access page
+
+---
+
+## Future Features (Planned)
+- **Admin panel**
+  - Manage staff/admin assignments (via secure server actions or service role)
+  - View/manage reservations, rooms, customers
+- **Full hotel workflow**
+  - Reservations CRUD
+  - Room inventory / availability
+  - Payments and receipts
+  - Maintenance requests tracking
+- **Audit logging**
+  - Staff/admin actions logged to an `audit_events` table
+- **Better UX**
+  - Toast notifications, loading states, error handling
+  - Profile settings page (name, etc.)
+- **Deployment**
+  - Production environment variables
+  - Hosted deployment (Vercel or VPS)
+
+---
+
+## Environment Variables
+Create a `.env.local` file:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
+## Run Locally
+```bash
+npm install
+npm run dev
+```
+## Notes:
+-Authorization is enforced in two layers:
+  1. Server-side route guards
+  2. Supabase RLS policies
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+-Client code should never be the source of truth for roles.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

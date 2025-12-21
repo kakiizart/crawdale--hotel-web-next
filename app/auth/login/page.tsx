@@ -15,22 +15,29 @@ export default function LoginPage() {
   const next = searchParams.get("next") || "/admin";
 
   const signInMagicLink = async () => {
+    const cleanedEmail = email.trim().toLowerCase();
+    if (!cleanedEmail) return;
+
     setLoading(true);
     setMsg(null);
 
     try {
       const origin = window.location.origin;
+      const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
 
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email: cleanedEmail,
         options: {
-          emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          emailRedirectTo: redirectTo,
         },
       });
 
+      console.log("signInWithOtp data:", data);
       if (error) throw error;
-      setMsg("Check your email for the login link.");
+
+      setMsg("Magic link sent (check inbox/spam/quarantine).");
     } catch (err: any) {
+      console.error(err);
       setMsg(err?.message ?? "Failed to send magic link.");
     } finally {
       setLoading(false);
@@ -47,12 +54,13 @@ export default function LoginPage() {
           placeholder="you@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
         />
 
         <button
           className="mt-4 w-full rounded-md border px-3 py-2"
           onClick={signInMagicLink}
-          disabled={loading || !email}
+          disabled={loading || !email.trim()}
         >
           {loading ? "Sending..." : "Send magic link"}
         </button>

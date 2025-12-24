@@ -1,12 +1,18 @@
-import { createClient } from "@/lib/supabase/server";
+// app/admin/rooms/page.tsx
 import { requireRole } from "@/lib/auth/guards";
-import { createRoom, updateRoom, deleteRoom } from "./actions";
+import { createClient } from "@/lib/supabase/server";
+import { createRoom, deleteRoom, toggleRoomActive, updateRoom } from "./actions";
 
-type RoomStatus = "available" | "maintenance" | "out_of_service";
-
-function centsToDollars(cents: number) {
-  return (cents / 100).toFixed(2);
-}
+// ✅ RetroUI Table component you added
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/retroui/Table";
 
 export default async function AdminRoomsPage() {
   await requireRole(["admin", "staff"], "/admin/rooms");
@@ -15,164 +21,235 @@ export default async function AdminRoomsPage() {
 
   const { data: rooms, error } = await supabase
     .from("rooms")
-    .select("id, hotel_id, room_number, room_type, capacity, base_price_cents, status, is_active, created_at")
+    .select(
+      "id, room_number, room_type, capacity, base_price_cents, status, is_active, created_at"
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
     return (
-      <div style={{ padding: 24 }}>
-        <h1>Rooms</h1>
-        <p style={{ color: "crimson" }}>Failed to load rooms: {error.message}</p>
+      <div className="rounded-lg border p-4">
+        <div className="font-semibold">Rooms</div>
+        <p className="text-sm text-red-600 mt-2">{error.message}</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24, display: "grid", gap: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 28, fontWeight: 700 }}>Rooms</h1>
-        <p style={{ opacity: 0.75 }}>Create, edit, and deactivate rooms (RLS enforced).</p>
-      </header>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-head">Rooms</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Staff/Admin CRUD (RLS enforced).
+        </p>
+      </div>
 
-      {/* Create Room */}
-      <section style={{ border: "1px solid #3333", borderRadius: 12, padding: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>Create a room</h2>
+      {/* Create */}
+      <div className="rounded-xl border p-4">
+        <h2 className="font-semibold font-head">Create room</h2>
 
-        <form action={createRoom} style={{ display: "grid", gap: 10, maxWidth: 520 }}>
-          <label>
-            Hotel ID (optional)
-            <input name="hotel_id" placeholder="uuid (optional)" style={{ width: "100%", padding: 8 }} />
-          </label>
+        <form
+          action={createRoom}
+          className="mt-3 grid grid-cols-1 md:grid-cols-5 gap-3"
+        >
+          <input
+            name="room_number"
+            placeholder="Room # (e.g. 101)"
+            className="rounded-md border px-3 py-2"
+            required
+          />
+          <input
+            name="room_type"
+            placeholder="Type (e.g. queen)"
+            className="rounded-md border px-3 py-2"
+            required
+          />
+          <input
+            name="capacity"
+            type="number"
+            min={1}
+            defaultValue={2}
+            className="rounded-md border px-3 py-2"
+          />
+          <input
+            name="base_price"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Base price ($)"
+            className="rounded-md border px-3 py-2"
+            required
+          />
+          <select
+            name="status"
+            className="rounded-md border px-3 py-2"
+            defaultValue="available"
+          >
+            <option value="available">available</option>
+            <option value="maintenance">maintenance</option>
+            <option value="out_of_service">out_of_service</option>
+          </select>
 
-          <label>
-            Room number *
-            <input name="room_number" required placeholder="e.g. 101" style={{ width: "100%", padding: 8 }} />
-          </label>
-
-          <label>
-            Room type *
-            <input name="room_type" required placeholder="e.g. Deluxe King" style={{ width: "100%", padding: 8 }} />
-          </label>
-
-          <label>
-            Capacity
-            <input name="capacity" type="number" defaultValue={2} min={1} style={{ width: "100%", padding: 8 }} />
-          </label>
-
-          <label>
-            Base price (USD) *
-            <input name="base_price" required placeholder="e.g. 149.99" style={{ width: "100%", padding: 8 }} />
-          </label>
-
-          <label>
-            Status
-            <select name="status" defaultValue="available" style={{ width: "100%", padding: 8 }}>
-              <option value="available">available</option>
-              <option value="maintenance">maintenance</option>
-              <option value="out_of_service">out_of_service</option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input name="is_active" type="checkbox" defaultChecked />
-            Active (public can see if true)
-          </label>
-
-          <button type="submit" style={{ padding: 10, fontWeight: 600 }}>
-            Create Room
+          <button className="md:col-span-5 rounded-md border px-3 py-2">
+            Create
           </button>
         </form>
-      </section>
+      </div>
 
-      {/* Rooms List */}
-      <section style={{ border: "1px solid #3333", borderRadius: 12, padding: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>
-          Existing rooms ({rooms?.length ?? 0})
-        </h2>
-
-        <div style={{ display: "grid", gap: 12 }}>
-          {rooms?.map((r) => (
-            <div key={r.id} style={{ border: "1px solid #3333", borderRadius: 12, padding: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 700 }}>
-                    {r.room_number} — {r.room_type}
-                  </div>
-                  <div style={{ opacity: 0.8, fontSize: 14 }}>
-                    Capacity: {r.capacity} • ${centsToDollars(r.base_price_cents)} • Status:{" "}
-                    <b>{r.status as RoomStatus}</b> • Active: <b>{String(r.is_active)}</b>
-                  </div>
-                  <div style={{ opacity: 0.6, fontSize: 12 }}>id: {r.id}</div>
-                </div>
-
-                {/* Delete */}
-                <form action={deleteRoom}>
-                  <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" style={{ padding: 10 }}>
-                    Delete
-                  </button>
-                </form>
-              </div>
-
-              {/* Update */}
-              <details style={{ marginTop: 10 }}>
-                <summary style={{ cursor: "pointer" }}>Edit room</summary>
-
-                <form action={updateRoom} style={{ display: "grid", gap: 10, marginTop: 10, maxWidth: 520 }}>
-                  <input type="hidden" name="id" value={r.id} />
-
-                  <label>
-                    Hotel ID (optional)
-                    <input name="hotel_id" defaultValue={r.hotel_id ?? ""} style={{ width: "100%", padding: 8 }} />
-                  </label>
-
-                  <label>
-                    Room number
-                    <input name="room_number" defaultValue={r.room_number} style={{ width: "100%", padding: 8 }} />
-                  </label>
-
-                  <label>
-                    Room type
-                    <input name="room_type" defaultValue={r.room_type} style={{ width: "100%", padding: 8 }} />
-                  </label>
-
-                  <label>
-                    Capacity
-                    <input name="capacity" type="number" defaultValue={r.capacity} min={1} style={{ width: "100%", padding: 8 }} />
-                  </label>
-
-                  <label>
-                    Base price (USD)
-                    <input
-                      name="base_price"
-                      defaultValue={centsToDollars(r.base_price_cents)}
-                      style={{ width: "100%", padding: 8 }}
-                    />
-                  </label>
-
-                  <label>
-                    Status
-                    <select name="status" defaultValue={r.status as RoomStatus} style={{ width: "100%", padding: 8 }}>
-                      <option value="available">available</option>
-                      <option value="maintenance">maintenance</option>
-                      <option value="out_of_service">out_of_service</option>
-                    </select>
-                  </label>
-
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input name="is_active" type="checkbox" defaultChecked={!!r.is_active} />
-                    Active
-                  </label>
-
-                  <button type="submit" style={{ padding: 10, fontWeight: 600 }}>
-                    Save changes
-                  </button>
-                </form>
-              </details>
-            </div>
-          ))}
+      {/* List */}
+      <div className="rounded-xl border overflow-hidden">
+        <div className="px-4 py-3 border-b font-semibold font-head">
+          All rooms
         </div>
-      </section>
+
+        <div className="overflow-x-auto p-2">
+          <Table>
+            <TableCaption className="text-muted-foreground">
+              {rooms?.length ? "Latest rooms first." : "No rooms yet."}
+            </TableCaption>
+
+            <TableHeader>
+              <TableRow>
+                <TableHead>Room</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Cap</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Active</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {(rooms ?? []).map((r) => {
+                const dollars = (r.base_price_cents / 100).toFixed(2);
+
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium">
+                      {r.room_number}
+                    </TableCell>
+
+                    {/* Type */}
+                    <TableCell>
+                      <form
+                        action={updateRoom}
+                        className="flex gap-2 items-center"
+                      >
+                        <input type="hidden" name="id" value={r.id} />
+                        <input
+                          name="room_type"
+                          defaultValue={r.room_type}
+                          className="w-32 rounded-md border px-2 py-1"
+                        />
+                        <button className="rounded-md border px-2 py-1">
+                          Save
+                        </button>
+                      </form>
+                    </TableCell>
+
+                    {/* Capacity */}
+                    <TableCell>
+                      <form
+                        action={updateRoom}
+                        className="flex gap-2 items-center"
+                      >
+                        <input type="hidden" name="id" value={r.id} />
+                        <input
+                          name="capacity"
+                          type="number"
+                          min={1}
+                          defaultValue={r.capacity}
+                          className="w-20 rounded-md border px-2 py-1"
+                        />
+                        <button className="rounded-md border px-2 py-1">
+                          Save
+                        </button>
+                      </form>
+                    </TableCell>
+
+                    {/* Price */}
+                    <TableCell>
+                      <form
+                        action={updateRoom}
+                        className="flex gap-2 items-center"
+                      >
+                        <input type="hidden" name="id" value={r.id} />
+                        <input
+                          name="base_price"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={dollars}
+                          className="w-24 rounded-md border px-2 py-1"
+                        />
+                        <button className="rounded-md border px-2 py-1">
+                          Save
+                        </button>
+                      </form>
+                    </TableCell>
+
+                    {/* Status */}
+                    <TableCell>
+                      <form
+                        action={updateRoom}
+                        className="flex gap-2 items-center"
+                      >
+                        <input type="hidden" name="id" value={r.id} />
+                        <select
+                          name="status"
+                          defaultValue={r.status}
+                          className="rounded-md border px-2 py-1"
+                        >
+                          <option value="available">available</option>
+                          <option value="maintenance">maintenance</option>
+                          <option value="out_of_service">out_of_service</option>
+                        </select>
+                        <button className="rounded-md border px-2 py-1">
+                          Save
+                        </button>
+                      </form>
+                    </TableCell>
+
+                    {/* Active */}
+                    <TableCell>
+                      <form action={toggleRoomActive}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <input
+                          type="hidden"
+                          name="is_active"
+                          value={String(r.is_active)}
+                        />
+                        <button className="rounded-md border px-2 py-1">
+                          {r.is_active ? "true" : "false"}
+                        </button>
+                      </form>
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell className="text-right">
+                      <form action={deleteRoom}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <button className="rounded-md border px-2 py-1">
+                          Delete
+                        </button>
+                      </form>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+
+              {rooms?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    No rooms yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
     </div>
   );
 }
